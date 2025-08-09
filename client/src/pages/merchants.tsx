@@ -8,8 +8,8 @@ export default function Merchants() {
       
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Painel do Comerciante</h1>
-          <p className="text-gray-600">Receber pagamentos com Gift Card NFT e processar troco automaticamente</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Terminal de Pagamento</h1>
+          <p className="text-gray-600">Interface moderna para receber pagamentos com Gift Cards NFT. Verificação de saldo em tempo real e processamento automático de troco.</p>
         </div>
         
         <MerchantPOS />
