@@ -33,15 +33,15 @@ export default function Navigation({ user }: NavigationProps) {
             <div className="hidden md:ml-6 md:flex md:space-x-8">
               {navItems.map((item) => (
                 <Link key={item.href} href={item.href}>
-                  <a
-                    className={`px-1 pt-1 pb-4 text-sm font-medium border-b-2 ${
+                  <span
+                    className={`px-1 pt-1 pb-4 text-sm font-medium border-b-2 cursor-pointer ${
                       item.active
                         ? "text-primary border-primary"
                         : "text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"
                     }`}
                   >
                     {item.label}
-                  </a>
+                  </span>
                 </Link>
               ))}
             </div>

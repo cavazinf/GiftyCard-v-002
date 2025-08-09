@@ -11,22 +11,30 @@ Preferred communication style: Simple, everyday language.
 ## Frontend Architecture
 The client application is built with React and TypeScript, utilizing a modern component-based architecture. The UI leverages Radix UI primitives with shadcn/ui components for consistent design patterns. The application uses Wouter for client-side routing and TanStack Query for server state management. Styling is handled through Tailwind CSS with custom design tokens configured for the GIFTY brand.
 
+**Web3 Integration**: Full Wagmi v2 integration provides wallet connectivity (MetaMask), transaction handling, and smart contract interactions. The app supports multiple chains (Polygon, Sepolia, Mumbai) with automatic network switching and balance management.
+
 ## Backend Architecture
-The server runs on Express.js with TypeScript, implementing a RESTful API structure. The application follows a modular architecture with separate layers for routing, business logic, and data access. Mock blockchain interactions simulate smart contract operations during development, with planned integration for actual blockchain networks (Polygon/Base). The server includes middleware for request logging, error handling, and CORS management.
+The server runs on Express.js with TypeScript, implementing a RESTful API structure. The application follows a modular architecture with separate layers for routing, business logic, and data access. The backend handles traditional database operations while blockchain interactions are managed client-side through Wagmi for better decentralization and security.
 
 ## Database Layer
 The system uses PostgreSQL as the primary database with Drizzle ORM for type-safe database operations. The schema includes tables for users, gift cards, merchants, transactions, and ZK proofs. Database migrations are managed through Drizzle Kit, and the connection is established via Neon's serverless PostgreSQL service.
 
 ## Smart Contract Integration
-The architecture is designed around ERC-6551 Token Bound Accounts, where each gift card NFT has its own account that can hold and manage USDC balances. Smart contracts include:
-- ERC6551Registry for creating Token Bound Accounts
-- ERC6551Account implementation for balance management
-- GiftCardNFT as the main contract for gift card issuance
-- Integration points for ERC-4337 Account Abstraction
-- ZK proof verification system for privacy-preserving balance validation
+**FULLY IMPLEMENTED**: Complete ERC-6551 Token Bound Account system with deployed smart contracts:
+- `GiftCardNFT.sol`: Main contract for NFT gift card issuance with USDC balance management
+- `ERC6551Registry.sol`: Registry for creating deterministic Token Bound Accounts
+- `ERC6551Account.sol`: Implementation allowing NFTs to own and manage USDC funds
+- Full Hardhat development environment with deployment scripts
+- Multi-network support (Polygon, Sepolia, Mumbai) with environment-based configuration
+
+**Blockchain Features**:
+- Each gift card NFT has its own Token Bound Account that holds USDC
+- Users can create, redeem, and reload gift cards directly on-chain
+- ZK proof system for privacy-preserving balance verification
+- Account Abstraction integration points for gasless transactions
 
 ## Security and Privacy
-The system implements zero-knowledge proofs to verify gift card balances without revealing sensitive information. User authentication and authorization are handled through wallet connections, with plans for gasless transactions through Account Abstraction. All blockchain interactions are designed to be secure and auditable.
+Wallet-based authentication through MetaMask/Web3 providers ensures secure access. All smart contracts follow OpenZeppelin standards with comprehensive access controls. Zero-knowledge proof integration allows balance verification without revealing sensitive data. Token Bound Accounts provide secure, auditable fund management.
 
 # External Dependencies
 

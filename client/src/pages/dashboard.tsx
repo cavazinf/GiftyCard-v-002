@@ -8,6 +8,8 @@ import QRCodeDisplay from "@/components/qr-code-display";
 import BlockchainInfo from "@/components/blockchain-info";
 import ZKProofDemo from "@/components/zk-proof-demo";
 import MerchantPOS from "@/components/merchant-pos";
+import { WalletConnect } from "@/components/wallet-connect";
+import { BlockchainGiftCardForm } from "@/components/blockchain-gift-card-form";
 import type { GiftCard } from "@shared/schema";
 
 export default function Dashboard() {
@@ -32,12 +34,16 @@ export default function Dashboard() {
           
           {/* Left Column - Gift Card Creation and List */}
           <div className="lg:col-span-2 space-y-8">
+            <BlockchainGiftCardForm onSuccess={(tokenId, tbaAddress) => {
+              console.log('Gift card criado:', { tokenId, tbaAddress });
+            }} />
             <GiftCardForm ownerId={mockUserId} />
             <GiftCardList ownerId={mockUserId} onQRClick={handleQRClick} />
           </div>
 
           {/* Right Column - Sidebar */}
           <div className="space-y-6">
+            <WalletConnect />
             <QRCodeDisplay giftCard={selectedGiftCard} />
             <BlockchainInfo giftCard={selectedGiftCard} />
             <ZKProofDemo giftCard={selectedGiftCard} />
