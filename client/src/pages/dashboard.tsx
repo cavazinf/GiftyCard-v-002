@@ -8,6 +8,7 @@ import QRCodeDisplay from "@/components/qr-code-display";
 import BlockchainInfo from "@/components/blockchain-info";
 import ZKProofDemo from "@/components/zk-proof-demo";
 
+
 import { WalletConnect } from "@/components/wallet-connect";
 import { BlockchainGiftCardForm } from "@/components/blockchain-gift-card-form";
 import type { GiftCard } from "@shared/schema";
@@ -50,7 +51,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Merchant Dashboard Section */}
+
 
 
         {/* Technology Demo Section */}
