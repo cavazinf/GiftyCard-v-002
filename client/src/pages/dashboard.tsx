@@ -7,7 +7,7 @@ import GiftCardList from "@/components/gift-card-list";
 import QRCodeDisplay from "@/components/qr-code-display";
 import BlockchainInfo from "@/components/blockchain-info";
 import ZKProofDemo from "@/components/zk-proof-demo";
-import MerchantPOS from "@/components/merchant-pos";
+
 import { WalletConnect } from "@/components/wallet-connect";
 import { BlockchainGiftCardForm } from "@/components/blockchain-gift-card-form";
 import type { GiftCard } from "@shared/schema";
@@ -51,12 +51,7 @@ export default function Dashboard() {
         </div>
 
         {/* Merchant Dashboard Section */}
-        <div className="mt-12">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Painel do Comerciante</h2>
-            <MerchantPOS />
-          </div>
-        </div>
+
 
         {/* Technology Demo Section */}
         <div className="mt-8">
