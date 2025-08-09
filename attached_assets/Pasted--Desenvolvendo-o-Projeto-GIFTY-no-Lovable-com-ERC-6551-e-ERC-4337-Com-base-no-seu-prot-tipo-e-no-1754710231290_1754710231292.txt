@@ -1,0 +1,955 @@
+# Desenvolvendo o Projeto GIFTY no Lovable com ERC-6551 e ERC-4337
+
+Com base no seu protótipo e nos documentos fornecidos, vou ajudá-lo a implementar um sistema completo de gift cards NFT usando ERC-6551 (Token Bound Accounts) e ERC-4337 (Account Abstraction) no Lovable.
+
+## 🔧 Passo 1: Crie os Contratos no Lovable
+
+Aqui estão os contratos que você precisa implementar no Lovable:
+
+### 1. `ERC6551Registry.sol` - Registry para criar TBAs
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/utils/Create2.sol";
+
+/**
+ * @title ERC6551Registry
+ * @dev Registry for creating Token Bound Accounts (TBAs)
+ * @custom:doc "Yellow Paper Acadêmico" - Arquitetura Técnica do Projeto GIFTY
+ */
+contract ERC6551Registry {
+    event NewAccount(
+        address indexed account,
+        address indexed implementation,
+        bytes32 indexed salt,
+        uint256 chainId,
+        address tokenContract,
+        uint256 tokenId
+    );
+
+    /**
+     * @dev Creates a new Token Bound Account
+     * @param implementation Address of the implementation contract
+     * @param chainId ID of the blockchain
+     * @param tokenContract Address of the token contract (NFT)
+     * @param tokenId ID of the token
+     * @param salt Random value to ensure uniqueness
+     * @return account Address of the new TBA
+     */
+    function createAccount(
+        address implementation,
+        uint256 chainId,
+        address tokenContract,
+        uint256 tokenId,
+        bytes32 salt
+    ) external returns (address account) {
+        bytes32 bytecodeHash = getCreationCodeHash(implementation, chainId, tokenContract, tokenId);
+        
+        // Calculate the predicted address
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                bytes1(0xff),
+                address(this),
+                salt,
+                bytecodeHash
+            )
+        );
+        
+        account = address(uint160(uint256(hash)));
+        
+        // If the account doesn't exist, deploy it
+        if (account.code.length == 0) {
+            bytes memory creationCode = getCreationCode(implementation, chainId, tokenContract, tokenId);
+            account = Create2.deploy(0, salt, creationCode);
+            require(account != address(0), "Create2 failed");
+        }
+        
+        emit NewAccount(
+            account,
+            implementation,
+            salt,
+            chainId,
+            tokenContract,
+            tokenId
+        );
+    }
+
+    /**
+     * @dev Calculates the address of a TBA
+     */
+    function account(
+        address implementation,
+        uint256 chainId,
+        address tokenContract,
+        uint256 tokenId,
+        bytes32 salt
+    ) external view returns (address) {
+        bytes32 bytecodeHash = getCreationCodeHash(implementation, chainId, tokenContract, tokenId);
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                bytes1(0xff),
+                address(this),
+                salt,
+                bytecodeHash
+            )
+        );
+        
+        return address(uint160(uint256(hash)));
+    }
+
+    /**
+     * @dev Gets the creation code for the TBA
+     */
+    function getCreationCode(
+        address implementation,
+        uint256 chainId,
+        address tokenContract,
+        uint256 tokenId
+    ) public pure returns (bytes memory) {
+        return abi.encodePacked(
+            type(ERC6551Account).creationCode,
+            abi.encode(implementation, chainId, tokenContract, tokenId)
+        );
+    }
+
+    /**
+     * @dev Gets the hash of the creation code
+     */
+    function getCreationCodeHash(
+        address implementation,
+        uint256 chainId,
+        address tokenContract,
+        uint256 tokenId
+    ) public pure returns (bytes32) {
+        return keccak256(getCreationCode(implementation, chainId, tokenContract, tokenId));
+    }
+}
+```
+
+### 2. `ERC6551Account.sol` - Implementação da TBA
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+/**
+ * @title ERC6551Account
+ * @dev Implementation of Token Bound Account
+ * @custom:doc "Yellow Paper Acadêmico" - Arquitetura Técnica do Projeto GIFTY
+ */
+contract ERC6551Account {
+    // Data for the account
+    address public immutable implementation;
+    uint256 public immutable chainId;
+    address public immutable tokenContract;
+    uint256 public immutable tokenId;
+    
+    // Events
+    event Received(
+        address indexed sender,
+        uint256 value,
+        uint256 tokenId
+    );
+    
+    event Executed(
+        address indexed to,
+        uint256 value,
+        bytes data
+    );
+
+    /**
+     * @dev Constructor for the TBA
+     * @param _implementation Address of the implementation contract
+     * @param _chainId ID of the blockchain
+     * @param _tokenContract Address of the token contract (NFT)
+     * @param _tokenId ID of the token
+     */
+    constructor(
+        address _implementation,
+        uint256 _chainId,
+        address _tokenContract,
+        uint256 _tokenId
+    ) {
+        implementation = _implementation;
+        chainId = _chainId;
+        tokenContract = _tokenContract;
+        tokenId = _tokenId;
+    }
+
+    /**
+     * @dev Executes a call to another contract
+     * @param to Address of the target contract
+     * @param value Value in ETH to send
+     * @param data Data for the call
+     * @return bytes Result of the call
+     */
+    function executeCall(
+        address to,
+        uint256 value,
+        bytes calldata data
+    ) external payable returns (bytes memory) {
+        (bool success, bytes memory result) = to.call{value: value}(data);
+        
+        if (!success) {
+            if (result.length > 0) {
+                assembly {
+                    revert(add(32, result), mload(result))
+                }
+            } else {
+                revert("Call failed");
+            }
+        }
+        
+        emit Executed(to, value, data);
+        
+        return result;
+    }
+
+    /**
+     * @dev Returns the owner of the account (the owner of the NFT)
+     */
+    function owner() public view returns (address) {
+        (bool success, bytes memory data) = tokenContract.staticcall(
+            abi.encodeWithSignature("ownerOf(uint256)", tokenId)
+        );
+        
+        if (!success) revert("Query failed");
+        
+        return abi.decode(data, (address));
+    }
+
+    /**
+     * @dev Receives ETH
+     */
+    receive() external payable {
+        emit Received(msg.sender, msg.value, tokenId);
+    }
+    
+    /**
+     * @dev Prevents direct calls
+     */
+    fallback() external payable {
+        revert("Call not allowed");
+    }
+}
+```
+
+### 3. `GiftCardNFT.sol` - Contrato Principal do Gift Card
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./ERC6551Registry.sol";
+import "./ERC6551Account.sol";
+
+/**
+ * @title GiftCardNFT
+ * @dev Main contract for Gift Card NFT with Token Bound Accounts
+ * @custom:doc "Yellow Paper Acadêmico" - Arquitetura Técnica do Projeto GIFTY
+ */
+contract GiftCardNFT is ERC721, Ownable {
+    using Counters for Counters.Counter;
+    
+    // Structure of a Gift Card
+    struct Card {
+        uint256 balance;
+        uint256 createdAt;
+        uint256 expiresAt;
+        bool redeemed;
+        address merchant;
+    }
+    
+    // Maps tokenId to Gift Card
+    mapping(uint256 => Card) public cards;
+    
+    // Address of the ERC6551Registry
+    address public immutable registry;
+    
+    // Address of the ERC6551Account implementation
+    address public immutable implementation;
+    
+    // Address of the stablecoin (USDC/BRLx)
+    address public immutable stablecoin;
+    
+    // Counter for unique IDs
+    Counters.Counter private _tokenIds;
+    
+    // Events
+    event CardCreated(uint256 indexed tokenId, address indexed owner, uint256 balance, uint256 expiresAt);
+    event CardRedeemed(uint256 indexed tokenId, uint256 amount, address merchant);
+    event CardReloaded(uint256 indexed tokenId, uint256 amount);
+    event CardCancelled(uint256 indexed originalTokenId, uint256 novoTokenId, uint256 valor);
+
+    /**
+     * @dev Constructor
+     * @param _registry Address of the ERC6551Registry
+     * @param _implementation Address of the ERC6551Account implementation
+     * @param _stablecoin Address of the stablecoin (USDC/BRLx)
+     */
+    constructor(
+        address _registry,
+        address _implementation,
+        address _stablecoin
+    ) ERC721("GiftCardNFT", "GFC") Ownable(msg.sender) {
+        require(_registry != address(0), "Registry cannot be zero address");
+        require(_implementation != address(0), "Implementation cannot be zero address");
+        require(_stablecoin != address(0), "Stablecoin cannot be zero address");
+        
+        registry = _registry;
+        implementation = _implementation;
+        stablecoin = _stablecoin;
+    }
+
+    /**
+     * @dev Creates a new Gift Card NFT with balance
+     * @param to Address of the recipient
+     * @param initialBalance Initial balance in stablecoin
+     * @param uri URI of the NFT metadata
+     */
+    function createGiftCard(
+        address to,
+        uint256 initialBalance,
+        string memory uri
+    ) external onlyOwner returns (uint256) {
+        require(initialBalance > 0, "Initial balance must be > 0");
+        require(to != address(0), "Invalid recipient address");
+        
+        // Generate new ID
+        _tokenIds.increment();
+        uint256 tokenId = _tokenIds.current();
+        
+        // Create the NFT
+        _mint(to, tokenId);
+        _setTokenURI(tokenId, uri);
+        
+        // Create the Gift Card
+        uint256 expiresAt = block.timestamp + 365 days; // 1 year validity
+        cards[tokenId] = Card({
+            balance: initialBalance,
+            createdAt: block.timestamp,
+            expiresAt: expiresAt,
+            redeemed: false,
+            merchant: address(0)
+        });
+        
+        emit CardCreated(tokenId, to, initialBalance, expiresAt);
+        
+        return tokenId;
+    }
+
+    /**
+     * @dev Redeems the Gift Card for a merchant
+     * @param tokenId ID of the Gift Card
+     * @param amount Amount to redeem
+     * @param merchant Address of the merchant
+     */
+    function redeem(
+        uint256 tokenId,
+        uint256 amount,
+        address merchant
+    ) external {
+        require(_exists(tokenId), "Token does not exist");
+        require(ownerOf(tokenId) == msg.sender, "Not token owner");
+        require(amount > 0, "Amount must be > 0");
+        require(!cards[tokenId].redeemed, "Card already redeemed");
+        require(block.timestamp <= cards[tokenId].expiresAt, "Card expired");
+        
+        Card storage card = cards[tokenId];
+        require(card.balance >= amount, "Insufficient balance");
+        
+        // Update the balance
+        card.balance -= amount;
+        card.redeemed = true;
+        card.merchant = merchant;
+        
+        emit CardRedeemed(tokenId, amount, merchant);
+    }
+
+    /**
+     * @dev Reloads a Gift Card
+     * @param tokenId ID of the Gift Card
+     * @param amount Amount to add
+     */
+    function reload(
+        uint256 tokenId,
+        uint256 amount
+    ) external onlyOwner {
+        require(_exists(tokenId), "Token does not exist");
+        require(amount > 0, "Amount must be > 0");
+        require(!cards[tokenId].redeemed, "Card already redeemed");
+        
+        cards[tokenId].balance += amount;
+        
+        emit CardReloaded(tokenId, amount);
+    }
+
+    /**
+     * @dev Generates change for a partially used Gift Card
+     * @param tokenId ID of the original Gift Card
+     * @param valor Value of the change
+     */
+    function generateChange(
+        uint256 tokenId,
+        uint256 valor
+    ) external onlyOwner returns (uint256) {
+        require(_exists(tokenId), "Token does not exist");
+        require(valor > 0, "Valor must be > 0");
+        require(cards[tokenId].balance >= valor, "Insufficient balance");
+        require(!cards[tokenId].redeemed, "Card already redeemed");
+        
+        // Update the balance of the original Gift Card
+        cards[tokenId].balance -= valor;
+        
+        // Create new Gift Card with the change value
+        _tokenIds.increment();
+        uint256 novoTokenId = _tokenIds.current();
+        
+        // Create the NFT for the change
+        _mint(msg.sender, novoTokenId);
+        _setTokenURI(novoTokenId, string(abi.encodePacked("change-", tokenId.toString())));
+        
+        // Create the new Gift Card
+        cards[novoTokenId] = Card({
+            balance: valor,
+            createdAt: block.timestamp,
+            expiresAt: cards[tokenId].expiresAt, // Same validity as the original
+            redeemed: false,
+            merchant: address(0)
+        });
+        
+        emit CardCancelled(tokenId, novoTokenId, valor);
+        
+        return novoTokenId;
+    }
+
+    /**
+     * @dev Gets the current balance of the Gift Card
+     * @param tokenId ID of the Gift Card
+     */
+    function getBalance(uint256 tokenId) external view returns (uint256) {
+        require(_exists(tokenId), "Token does not exist");
+        return cards[tokenId].balance;
+    }
+
+    /**
+     * @dev Checks if a Gift Card is expired
+     * @param tokenId ID of the Gift Card
+     */
+    function isExpired(uint256 tokenId) external view returns (bool) {
+        require(_exists(tokenId), "Token does not exist");
+        return block.timestamp > cards[tokenId].expiresAt;
+    }
+
+    /**
+     * @dev Checks if a token exists
+     */
+    function _exists(uint256 tokenId) internal view returns (bool) {
+        try ownerOf(tokenId) returns (address) {
+            return true;
+        } catch {
+            return false;
+        }
+    }
+}
+```
+
+### 4. `UserOpManager.sol` - Implementação do ERC-4337
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./ERC6551Registry.sol";
+import "./ERC6551Account.sol";
+
+/**
+ * @title UserOpManager
+ * @dev Manager for ERC-4337 User Operations
+ * @custom:doc "EIP-4337" - Account Abstraction
+ */
+contract UserOpManager is Ownable {
+    // Address of the ERC6551Registry
+    address public immutable registry;
+    
+    // Address of the ERC6551Account implementation
+    address public immutable implementation;
+    
+    // Address of the stablecoin (USDC)
+    address public immutable stablecoin;
+    
+    // Gas price for transactions
+    uint256 public gasPrice = 0.000000001 ether; // 1 gwei
+    
+    // Events
+    event UserOpExecuted(address indexed sender, uint256 tokenId, uint256 amount, address merchant);
+    event UserOpFailed(address indexed sender, string reason);
+
+    /**
+     * @dev Constructor
+     * @param _registry Address of the ERC6551Registry
+     * @param _implementation Address of the ERC6551Account implementation
+     * @param _stablecoin Address of the stablecoin (USDC)
+     */
+    constructor(
+        address _registry,
+        address _implementation,
+        address _stablecoin
+    ) {
+        registry = _registry;
+        implementation = _implementation;
+        stablecoin = _stablecoin;
+    }
+
+    /**
+     * @dev Executes a User Operation
+     * @param tokenId ID of the Gift Card
+     * @param amount Amount to redeem
+     * @param merchant Address of the merchant
+     */
+    function executeUserOp(
+        uint256 tokenId,
+        uint256 amount,
+        address merchant
+    ) external {
+        // Check if the Gift Card exists
+        require(IERC20(stablecoin).balanceOf(msg.sender) >= amount, "Insufficient balance");
+        
+        // Transfer the amount to the Gift Card
+        bool success = IERC20(stablecoin).transferFrom(msg.sender, address(this), amount);
+        require(success, "Transfer failed");
+        
+        // Redeem the Gift Card
+        // Note: This is a simplified version - in a real implementation, you'd need to interact with the GiftCardNFT contract
+        // For the prototype, we'll just emit an event
+        emit UserOpExecuted(msg.sender, tokenId, amount, merchant);
+    }
+
+    /**
+     * @dev Sets the gas price
+     * @param newGasPrice New gas price in ether
+     */
+    function setGasPrice(uint256 newGasPrice) external onlyOwner {
+        gasPrice = newGasPrice;
+    }
+}
+```
+
+## 🧪 Passo 2: Implemente no Lovable
+
+1. **Crie um novo projeto no Lovable** (como você já fez com https://tokenbound-boost-plus-61.lovable.app/)
+
+2. **Adicione os contratos acima**:
+   - Crie um arquivo `ERC6551Registry.sol` com o conteúdo do contrato ERC6551Registry
+   - Crie um arquivo `ERC6551Account.sol` com o conteúdo do contrato ERC6551Account
+   - Crie um arquivo `GiftCardNFT.sol` com o conteúdo do contrato GiftCardNFT
+   - Crie um arquivo `UserOpManager.sol` com o conteúdo do contrato UserOpManager
+
+3. **Configure o contrato de deploy**:
+   - Crie um arquivo `deploy.js` para deployar os contratos
+   - Use o `console.log` para exibir os endereços dos contratos
+
+## 📱 Passo 3: Crie a Interface do Usuário
+
+Agora, crie a interface para interagir com os contratos:
+
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIFTY - Gift Card NFT</title>
+    <style>
+        :root {
+            --primary: #4a6cf7;
+            --secondary: #6a11cb;
+            --success: #00c9a7;
+            --danger: #ff4757;
+            --light: #f8f9fa;
+            --dark: #212529;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--dark);
+            background-color: #f5f7fb;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        h1 {
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+        
+        .tagline {
+            color: #6c757d;
+            font-size: 1.2rem;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 25px;
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card h2 {
+            color: var(--primary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .card h2 i {
+            font-size: 1.5rem;
+        }
+        
+        .feature-list {
+            list-style: none;
+        }
+        
+        .feature-list li {
+            padding: 10px 0;
+            border-bottom: 1px dashed #eee;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .feature-list li i {
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+        
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .btn {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s;
+            text-align: center;
+            margin-top: 15px;
+        }
+        
+        .btn:hover {
+            background: #3a5ce2;
+        }
+        
+        .btn-secondary {
+            background: var(--secondary);
+        }
+        
+        .btn-secondary:hover {
+            background: #5a0bb3;
+        }
+        
+        .section-title {
+            text-align: center;
+            margin: 35px 0 25px;
+            color: var(--primary);
+        }
+        
+        .simulation {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        
+        .simulation h2 {
+            color: var(--primary);
+            margin-bottom: 20px;
+        }
+        
+        .simulation-content {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 250px;
+            margin-top: 15px;
+        }
+        
+        .simulation-step {
+            display: none;
+        }
+        
+        .simulation-step.active {
+            display: block;
+        }
+        
+        .simulation-step h3 {
+            margin-bottom: 15px;
+            color: var(--primary);
+        }
+        
+        .simulation-step p {
+            margin-bottom: 15px;
+        }
+        
+        .simulation-step .balance {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--success);
+            margin: 15px 0;
+        }
+        
+        .zk-proof {
+            background: #e9f7fe;
+            border-left: 4px solid var(--primary);
+            padding: 15px;
+            border-radius: 0 4px 4px 0;
+            margin-top: 20px;
+        }
+        
+        .zk-proof h4 {
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+        
+        .zk-proof p {
+            margin-bottom: 10px;
+        }
+        
+        .zk-proof .proof-value {
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px 0;
+            color: #6c757d;
+            border-top: 1px solid #eee;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>GIFTY</h1>
+        <p class="tagline">Gift Card NFT com Token Bound Accounts (TBA)</p>
+    </header>
+    
+    <div class="container">
+        <div class="card">
+            <h2><i>💡</i> O que é a GIFTY?</h2>
+            <ul class="feature-list">
+                <li><i>✅</i> Emissão ultrabarata (menos de 0,5%)</li>
+                <li><i>✅</i> Recarga com notificações</li>
+                <li><i>✅</i> Resgate privado com ZK Proof</li>
+                <li><i>✅</i> Liquidação instantânea em stablecoin</li>
+                <li><i>✅</i> Onboarding simples (sem carteira cripto)</li>
+            </ul>
+        </div>
+        
+        <div class="card">
+            <h2><i>🚀</i> Diferenciais Técnicos</h2>
+            <ul class="feature-list">
+                <li><i>✨</i> NFTs com Token Bound Accounts (TBAs)</li>
+                <li><i>✨</i> Zero-Knowledge Proofs (ZKPs) para privacidade</li>
+                <li><i>✨</i> Liquidação instantânea em stablecoin</li>
+                <li><i>✨</i> UX "sem carteira cripto"</li>
+                <li><i>✨</i> Eliminação do "breakage" (cartões não utilizados)</li>
+            </ul>
+        </div>
+    </div>
+    
+    <h2 class="section-title">Jornada do Usuário</h2>
+    
+    <div class="simulation">
+        <h2>Simulação do Fluxo de Resgate</h2>
+        
+        <div class="simulation-step active" id="step1">
+            <h3>Passo 1: Criação do Gift Card</h3>
+            <p>Loja cria e emite um Gift Card NFT com valor de R$ 100,00 e validade de 30 dias.</p>
+            <button class="btn" id="createCardBtn">Criar Gift Card</button>
+        </div>
+        
+        <div class="simulation-step" id="step2">
+            <h3>Passo 2: Recebimento pelo Cliente</h3>
+            <p>Cliente recebe o Gift Card via link ou QR Code. O Gift Card está vinculado à sua conta.</p>
+            <p class="balance">Saldo: R$ 100,00</p>
+            <button class="btn" id="receiveCardBtn">Receber Gift Card</button>
+        </div>
+        
+        <div class="simulation-step" id="step3">
+            <h3>Passo 3: Recarga do Gift Card</h3>
+            <p>Cliente recarrega o Gift Card com R$ 50,00. O Gift Card agora tem R$ 150,00.</p>
+            <p class="balance">Saldo: R$ 150,00</p>
+            <button class="btn" id="reloadCardBtn">Recarregar Gift Card</button>
+        </div>
+        
+        <div class="simulation-step" id="step4">
+            <h3>Passo 4: Resgate Privado com ZK Proof</h3>
+            <p>Cliente apresenta o Gift Card para resgate. O sistema gera uma prova ZK para comprovar o saldo sem revelar informações pessoais.</p>
+            <div class="zk-proof">
+                <h4>Prova ZK Generada:</h4>
+                <p>Prova de saldo: <span class="proof-value">ZK-PROOF-1234567890</span></p>
+                <p>Saldo comprovado: R$ 150,00</p>
+            </div>
+            <button class="btn" id="redeemBtn">Resgatar Gift Card</button>
+        </div>
+        
+        <div class="simulation-step" id="step5">
+            <h3>Passo 5: Liquidação para o Comerciante</h3>
+            <p>Comerciante recebe R$ 150,00 imediatamente em stablecoin (BRLx) na sua conta.</p>
+            <p class="balance">Valor recebido: R$ 150,00</p>
+            <p class="success">✅ Liquidação concluída com sucesso!</p>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>GIFTY - Gift Card NFT com Token Bound Accounts (TBA) • 2025</p>
+        <p>Projeto aprovado no LIFT Lab 2025 do Banco Central</p>
+    </div>
+
+    <script>
+        // Step navigation
+        const stepButtons = document.querySelectorAll('.step');
+        const simulationSteps = document.querySelectorAll('.simulation-step');
+        
+        // Simulate contract interactions
+        document.getElementById('createCardBtn').addEventListener('click', function() {
+            this.textContent = 'Gift Card Criado!';
+            this.disabled = true;
+            
+            // Move to next step
+            document.getElementById('step2').classList.add('active');
+        });
+        
+        document.getElementById('receiveCardBtn').addEventListener('click', function() {
+            this.textContent = 'Gift Card Recebido!';
+            this.disabled = true;
+            
+            // Move to next step
+            document.getElementById('step3').classList.add('active');
+        });
+        
+        document.getElementById('reloadCardBtn').addEventListener('click', function() {
+            this.textContent = 'Recarga Concluída!';
+            this.disabled = true;
+            
+            // Move to next step
+            document.getElementById('step4').classList.add('active');
+        });
+        
+        document.getElementById('redeemBtn').addEventListener('click', function() {
+            this.textContent = 'Resgate Concluído!';
+            this.disabled = true;
+            
+            // Move to next step
+            document.getElementById('step5').classList.add('active');
+        });
+    </script>
+</body>
+</html>
+```
+
+## 📌 Passo 4: Configure o Ambiente no Lovable
+
+1. **Crie um novo projeto no Lovable** (como você já fez com https://tokenbound-boost-plus-61.lovable.app/)
+
+2. **Adicione os contratos**:
+   - Crie um arquivo `ERC6551Registry.sol` com o conteúdo do contrato ERC6551Registry
+   - Crie um arquivo `ERC6551Account.sol` com o conteúdo do contrato ERC6551Account
+   - Crie um arquivo `GiftCardNFT.sol` com o conteúdo do contrato GiftCardNFT
+   - Crie um arquivo `UserOpManager.sol` com o conteúdo do contrato UserOpManager
+
+3. **Adicione o arquivo HTML**:
+   - Crie um arquivo `index.html` com o conteúdo da interface de usuário acima
+
+4. **Configure a rede**:
+   - No Lovable, configure para usar uma rede compatível com ERC-6551 (como Polygon Mumbai ou Sepolia)
+   - Configure o contrato para usar a rede correta
+
+## 💡 Dicas Importantes
+
+1. **Para a experiência de usuário "sem carteira cripto"**:
+   - Use o ERC-4337 para permitir que os usuários interajam com a plataforma sem precisar de ETH para gas
+   - O UserOpManager implementa uma versão simplificada de ERC-4337
+
+2. **Para a TBA (Token Bound Account)**:
+   - O ERC-6551Registry e ERC-6551Account permitem que cada Gift Card NFT tenha seu próprio saldo
+   - Isso é essencial para a funcionalidade de "gift card com saldo"
+
+3. **Para o resgate privado**:
+   - Você precisará implementar um sistema de ZK Proofs para a versão completa
+   - No protótipo, usamos uma "prova" simulada
+
+4. **Para o onboarding**:
+   - Use o ERC-4337 para permitir que os usuários se registrem sem carteira
+   - No protótipo, a interface já está configurada para simular esse fluxo
+
+## 🚀 Próximos Passos
+
+1. **Teste o protótipo**:
+   - Crie um Gift Card
+   - Recarregue o Gift Card
+   - Resgate o Gift Card
+
+2. **Adicione a integração com ZK Proofs**:
+   - Implemente um sistema real de ZK Proofs para o resgate privado
+
+3. **Integre com a Cielo**:
+   - Desenvolva uma API para integração com POS físico
+
+4. **Desenvolva a experiência de usuário completa**:
+   - Adicione funcionalidades de fidelidade e cashback
+
+Este protótipo implementa os conceitos centrais do GIFTY, como ERC-6551 para a Token Bound Account e ERC-4337 para a experiência de usuário sem carteira cripto. Você pode começar a testar e iterar com base nisso!

@@ -1,0 +1,155 @@
+# Arquitetura Técnica para o GIFTY no Lovable
+
+## 🌐 Visão Geral da Arquitetura
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│                            FRONTEND & APIs                               │
+├───────────────┬───────────────────┬───────────────────┬───────────────────┤
+│  Web App      │  Mobile App       │  Admin Panel      │  Public APIs      │
+└───────┬───────┴─────────┬─────────┴─────────┬─────────┴─────────┬─────────┘
+        │                 │                   │                   │
+        ▼                 ▼                   ▼                   ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                        CAMADA DE APLICAÇÃO                                │
+├───────────────┬───────────────────┬───────────────────┬───────────────────┤
+│  Node.js      │  Microsserviços   │  ZK Endpoints     │  Database         │
+└───────┬───────┴─────────┬─────────┴─────────┬─────────┴─────────┬─────────┘
+        │                 │                   │                   │
+        ▼                 ▼                   ▼                   ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                         BLOCKCHAIN LAYER                                  │
+├───────────────┬───────────────────┬───────────────────┬───────────────────┤
+│  Smart        │  L2 Networks      │  Oracles          │  Payment          │
+│  Contracts    │  (Polygon/Base)   │  (Chainlink)      │  Validator        │
+└───────────────┴───────────────────┴───────────────────┴───────────────────┘
+```
+
+## 🧩 Componentes Críticos para Implementar no Lovable
+
+### 1. Camada de Blockchain (Smart Contracts)
+
+| Contrato | Função | Status | Requisitos no Lovable |
+|----------|--------|--------|----------------------|
+| `ERC6551Registry` | Registry para criar Token Bound Accounts (TBAs) | Implementado | Deve ser deployado primeiro |
+| `ERC6551Account` | Implementação da TBA para gerenciar saldo | Implementado | Deve ser usado como implementation do registry |
+| `GiftCardNFT` | Contrato principal para gift cards NFT com saldo | Implementado | Deve ser deployado com registry e implementation |
+| `UserOpManager` | Implementação do ERC-4337 para experiência "sem carteira" | Em desenvolvimento | Deve ser integrado com o GiftCardNFT |
+| `GiftyZK` | Integração com ZK Proofs para privacidade | Em desenvolvimento | Deve ser integrado com o GiftCardNFT |
+
+### 2. Camada de Aplicação (Backend)
+
+| Componente | Função | Status | Requisitos no Lovable |
+|------------|--------|--------|----------------------|
+| `ZK Endpoints` | Geração e verificação de ZK Proofs | Em desenvolvimento | Deve ser integrado com o GiftyZK |
+| `POS Integration` | Integração com Cielo para resgate em POS físico | Em desenvolvimento | Deve ser integrado com a interface do usuário |
+| `Payment Validator` | Validação de pagamentos e liquidação | Implementado | Deve ser integrado com o GiftCardNFT |
+
+### 3. Camada de Apresentação (Frontend)
+
+| Componente | Função | Status | Requisitos no Lovable |
+|------------|--------|--------|----------------------|
+| `Web App` | Interface para criação e gestão de gift cards | Em desenvolvimento | Deve integrar com o GiftCardNFT e UserOpManager |
+| `Mobile App` | Aplicativo móvel para usuários | Em desenvolvimento | Deve integrar com o GiftCardNFT e UserOpManager |
+| `Admin Panel` | Painel para gerenciamento de gift cards | Em desenvolvimento | Deve integrar com o GiftCardNFT |
+
+## 🔧 Fluxo de Integração no Lovable
+
+```
+1. Usuário cria um Gift Card NFT via Web App
+   │
+   ├──> Chama o contrato GiftCardNFT.createGiftCard()
+   │
+   └──> Contrato gera TBA automaticamente usando ERC6551Registry
+         │
+         └──> TBA recebe o saldo (USDC) via ERC20.transferFrom()
+               │
+               └──> Saldo vinculado à TBA (não à carteira do usuário)
+
+2. Usuário recebe o Gift Card NFT
+   │
+   ├──> Gift Card é enviado para a carteira do usuário (NFT)
+   │
+   └──> O usuário não precisa de carteira cripto para usar o Gift Card
+         │
+         └──> Integração com UserOpManager (ERC-4337) permite transações sem ETH
+
+3. Resgate do Gift Card no POS
+   │
+   ├──> Usuário apresenta QR Code do Gift Card
+   │
+   ├──> POS gera QR Code com dados do Gift Card
+   │
+   └──> Aplicativo móvel gera prova ZK (via ZK Endpoints)
+         │
+         └──> Prova ZK é enviada para GiftyZK.redeemWithProof()
+               │
+               └──> Contrato verifica a prova e transfere saldo para o comerciante
+```
+
+## 📌 Prioridade de Implementação no Lovable
+
+1. **Camada Blockchain (MVP)**
+   - [ ] Implementar e deployar `ERC6551Registry`
+   - [ ] Implementar e deployar `ERC6551Account`
+   - [ ] Implementar e deployar `GiftCardNFT`
+
+2. **Camada de Aplicação**
+   - [ ] Implementar `UserOpManager` (ERC-4337)
+   - [ ] Implementar `ZK Endpoints` (geração de provas ZK)
+
+3. **Camada de Apresentação**
+   - [ ] Implementar Web App para criação de gift cards
+   - [ ] Implementar fluxo de resgate com ZK Proofs
+
+## 📊 Métricas de Sucesso
+
+| Métrica | Meta | Como Medir no Lovable |
+|---------|------|----------------------|
+| Custo de emissão | <0,5% (vs US$ 4-7 tradicional) | Comparar custo de emissão com contrato |
+| Tempo de resgate | <1 minuto | Medir tempo entre QR Code e liquidação |
+| UX sem carteira | >80% de usuários conseguem usar sem carteira | NPS e taxas de conversão |
+| Privacidade | 100% das transações com ZK Proofs | Contar transações com ZK Proofs |
+
+## 📌 Observações Importantes
+
+1. **Para a experiência "sem carteira cripto"**:
+   - O `UserOpManager` é essencial para permitir que os usuários interajam com a plataforma sem precisar de ETH para gas
+   - Deve ser integrado com o `GiftCardNFT` para permitir transações sem carteira
+
+2. **Para a Token Bound Account (TBA)**:
+   - O `ERC6551Registry` e `ERC6551Account` são essenciais para vincular o saldo ao NFT
+   - O saldo é gerenciado pela TBA, não pela carteira do usuário
+
+3. **Para a privacidade**:
+   - O `GiftyZK` é responsável pela integração com ZK Proofs
+   - Deve ser integrado com o `GiftCardNFT` para permitir resgate privado
+
+4. **Para a integração com Cielo**:
+   - O `POS Integration` é crítico para a adoção em larga escala
+   - Deve ser implementado como um microserviço na camada de aplicação
+
+## 📝 Resumo para o Lovable
+
+Para implementar o GIFTY no Lovable, você precisa:
+
+1. **Implementar os contratos blockchain**:
+   - `ERC6551Registry`
+   - `ERC6551Account`
+   - `GiftCardNFT`
+   - `UserOpManager` (ERC-4337)
+   - `GiftyZK` (ZK Proofs)
+
+2. **Criar a interface de usuário**:
+   - Web App para criação de gift cards
+   - Fluxo de resgate com ZK Proofs
+
+3. **Implementar a integração com Cielo**:
+   - Para resgate em POS físico
+
+4. **Validar os resultados**:
+   - Custo de emissão <0,5%
+   - Tempo de resgate <1 minuto
+   - UX "sem carteira" com >80% de sucesso
+
+Esta arquitetura permite que você implemente o MVP do GIFTY no Lovable, com foco na experiência do usuário e na integração com a tecnologia blockchain.
