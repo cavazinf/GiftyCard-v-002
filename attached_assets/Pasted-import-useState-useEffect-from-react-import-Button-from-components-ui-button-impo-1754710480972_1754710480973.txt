@@ -1,0 +1,249 @@
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Wallet, Power, Copy, CheckCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+interface WalletState {
+  address: string | null;
+  isConnected: boolean;
+  chainId: number | null;
+  balance: string | null;
+}
+
+export const WalletConnect = () => {
+  const [wallet, setWallet] = useState<WalletState>({
+    address: null,
+    isConnected: false,
+    chainId: null,
+    balance: null,
+  });
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { toast } = useToast();
+
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      toast({
+        title: "MetaMask não encontrada",
+        description: "Por favor, instale o MetaMask para continuar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsConnecting(true);
+    try {
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts',
+      });
+      
+      const chainId = await window.ethereum.request({
+        method: 'eth_chainId',
+      });
+
+      const balance = await window.ethereum.request({
+        method: 'eth_getBalance',
+        params: [accounts[0], 'latest'],
+      });
+
+      setWallet({
+        address: accounts[0],
+        isConnected: true,
+        chainId: parseInt(chainId, 16),
+        balance: (parseInt(balance, 16) / 1e18).toFixed(4),
+      });
+
+      toast({
+        title: "Carteira conectada!",
+        description: `Conectado com sucesso: ${accounts[0].slice(0, 6)}...${accounts[0].slice(-4)}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao conectar",
+        description: "Falha ao conectar com a carteira.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const disconnectWallet = () => {
+    setWallet({
+      address: null,
+      isConnected: false,
+      chainId: null,
+      balance: null,
+    });
+    toast({
+      title: "Carteira desconectada",
+      description: "Carteira desconectada com sucesso.",
+    });
+  };
+
+  const copyAddress = () => {
+    if (wallet.address) {
+      navigator.clipboard.writeText(wallet.address);
+      toast({
+        title: "Endereço copiado!",
+        description: "Endereço da carteira copiado para a área de transferência.",
+      });
+    }
+  };
+
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const getNetworkName = (chainId: number) => {
+    const networks: { [key: number]: string } = {
+      1: 'Ethereum Mainnet',
+      5: 'Goerli Testnet',
+      11155111: 'Sepolia Testnet',
+      137: 'Polygon Mainnet',
+      80001: 'Polygon Mumbai',
+    };
+    return networks[chainId] || `Chain ${chainId}`;
+  };
+
+  useEffect(() => {
+    const checkConnection = async () => {
+      if (window.ethereum) {
+        try {
+          const accounts = await window.ethereum.request({
+            method: 'eth_accounts',
+          });
+          if (accounts.length > 0) {
+            const chainId = await window.ethereum.request({
+              method: 'eth_chainId',
+            });
+            const balance = await window.ethereum.request({
+              method: 'eth_getBalance',
+              params: [accounts[0], 'latest'],
+            });
+            setWallet({
+              address: accounts[0],
+              isConnected: true,
+              chainId: parseInt(chainId, 16),
+              balance: (parseInt(balance, 16) / 1e18).toFixed(4),
+            });
+          }
+        } catch (error) {
+          console.error('Erro ao verificar conexão:', error);
+        }
+      }
+    };
+
+    checkConnection();
+
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts: string[]) => {
+        if (accounts.length === 0) {
+          disconnectWallet();
+        } else {
+          setWallet(prev => ({ ...prev, address: accounts[0] }));
+        }
+      });
+
+      window.ethereum.on('chainChanged', (chainId: string) => {
+        setWallet(prev => ({ ...prev, chainId: parseInt(chainId, 16) }));
+      });
+    }
+
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeAllListeners('accountsChanged');
+        window.ethereum.removeAllListeners('chainChanged');
+      }
+    };
+  }, []);
+
+  return (
+    <Card className="gradient-card border-gradient">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Wallet className="h-5 w-5 text-primary" />
+          Conectar Carteira
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!wallet.isConnected ? (
+          <Button
+            onClick={connectWallet}
+            disabled={isConnecting}
+            className="w-full gradient-primary hover:shadow-neon"
+          >
+            {isConnecting ? (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground"></div>
+                Conectando...
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4" />
+                Conectar MetaMask
+              </div>
+            )}
+          </Button>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Badge variant="outline" className="border-primary text-primary glow-primary">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Conectado
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={disconnectWallet}
+                className="text-destructive hover:text-destructive-foreground hover:bg-destructive"
+              >
+                <Power className="h-3 w-3 mr-1" />
+                Desconectar
+              </Button>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-2 bg-secondary rounded-lg">
+                <span className="text-sm text-muted-foreground">Endereço:</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm">{formatAddress(wallet.address!)}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={copyAddress}
+                    className="h-6 w-6 p-0"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between p-2 bg-secondary rounded-lg">
+                <span className="text-sm text-muted-foreground">Rede:</span>
+                <span className="text-sm font-medium">{getNetworkName(wallet.chainId!)}</span>
+              </div>
+              
+              <div className="flex items-center justify-between p-2 bg-secondary rounded-lg">
+                <span className="text-sm text-muted-foreground">Saldo:</span>
+                <span className="text-sm font-medium">{wallet.balance} ETH</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// Declaração de tipos para o window.ethereum
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: { method: string; params?: any[] }) => Promise<any>;
+      on: (event: string, callback: (data: any) => void) => void;
+      removeAllListeners: (event: string) => void;
+    };
+  }
+}
