@@ -9,62 +9,37 @@ export default function Merchants() {
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Painel do Comerciante</h1>
-          <p className="text-gray-600">Integração POS e processamento de resgates</p>
+          <p className="text-gray-600">Receber pagamentos com Gift Card NFT e processar troco automaticamente</p>
         </div>
         
         <MerchantPOS />
         
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="mt-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Configuração POS</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ID do Terminal
-                </label>
-                <input 
-                  type="text" 
-                  placeholder="12345"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Webhook URL
-                </label>
-                <input 
-                  type="url" 
-                  placeholder="https://api.exemplo.com/webhook"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-              </div>
-              <button className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
-                Salvar Configurações
-              </button>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Histórico de Transações</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Histórico de Transações Recentes</h3>
             <div className="space-y-3">
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Resgate #1247</p>
+                  <p className="text-sm font-medium text-gray-900">Compra #1247</p>
+                  <p className="text-xs text-gray-600">Gift Card: GFC-ABC123</p>
                   <p className="text-xs text-gray-600">há 2 horas</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-medium text-green-600">$50.00</p>
+                  <p className="text-xs text-blue-600">Troco: $25.00 (Novo NFT)</p>
                   <p className="text-xs text-gray-600">Concluído</p>
                 </div>
               </div>
               
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Resgate #1246</p>
+                  <p className="text-sm font-medium text-gray-900">Compra #1246</p>
+                  <p className="text-xs text-gray-600">Gift Card: GFC-DEF456</p>
                   <p className="text-xs text-gray-600">há 3 horas</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium text-green-600">$25.00</p>
+                  <p className="text-sm font-medium text-green-600">$100.00</p>
+                  <p className="text-xs text-gray-600">Sem troco</p>
                   <p className="text-xs text-gray-600">Concluído</p>
                 </div>
               </div>

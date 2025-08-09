@@ -51,8 +51,9 @@ Wallet-based authentication through MetaMask/Web3 providers ensures secure acces
 - **Vite**: Build tool and development server with hot module replacement
 
 ## Payment Processing
-- **Cielo POS Integration**: Point-of-sale terminal integration for physical gift card redemption
-- **Webhook System**: Real-time transaction notifications and status updates
+- **Simplified POS Integration**: Streamlined merchant dashboard for gift card redemption
+- **Smart Change Processing**: Automatic creation of new NFTs when change is due
+- **Balance Verification**: Real-time gift card balance checking before purchase processing
 
 ## UI/UX Libraries
 - **Tailwind CSS**: Utility-first CSS framework for styling

@@ -2,128 +2,246 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, Zap, Settings, Loader2 } from "lucide-react";
+import { Gift, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+
+interface VerificationResult {
+  balance: number;
+  tokenId: string;
+  valid: boolean;
+}
+
+interface TransactionResult {
+  originalBalance: number;
+  purchaseAmount: number;
+  change: number;
+  changeNFT: string | null;
+  success: boolean;
+}
 
 export default function MerchantPOS() {
-  const [redemptionCode, setRedemptionCode] = useState("");
-  const [amount, setAmount] = useState("");
+  const [giftCardCode, setGiftCardCode] = useState("");
+  const [purchaseAmount, setPurchaseAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
+  const [transactionComplete, setTransactionComplete] = useState<TransactionResult | false>(false);
 
-  const handleProcessRedemption = () => {
-    if (!redemptionCode || !amount) return;
+  const handleVerifyBalance = async () => {
+    if (!giftCardCode) return;
     
     setIsProcessing(true);
     
-    // Simulate POS processing
+    // Simulate balance verification
     setTimeout(() => {
+      const mockBalance = 150.00;
+      setVerificationResult({
+        balance: mockBalance,
+        tokenId: giftCardCode,
+        valid: true
+      });
       setIsProcessing(false);
-      setRedemptionCode("");
-      setAmount("");
-      alert("Resgate processado com sucesso!");
+    }, 1500);
+  };
+
+  const handleProcessPurchase = async () => {
+    if (!purchaseAmount || !verificationResult) return;
+    
+    setIsProcessing(true);
+    
+    // Simulate purchase processing with change calculation
+    setTimeout(() => {
+      const balance = verificationResult.balance;
+      const amount = parseFloat(purchaseAmount);
+      const change = balance - amount;
+      
+      setTransactionComplete({
+        originalBalance: balance,
+        purchaseAmount: amount,
+        change: change > 0 ? change : 0,
+        changeNFT: change > 0 ? `GFC-CHG-${Date.now()}` : null,
+        success: balance >= amount
+      });
+      
+      if (balance >= amount) {
+        setGiftCardCode("");
+        setPurchaseAmount("");
+        setVerificationResult(null);
+      }
+      
+      setIsProcessing(false);
     }, 2000);
   };
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {/* POS Integration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">Integração POS</CardTitle>
+  const resetTransaction = () => {
+    setTransactionComplete(false);
+    setVerificationResult(null);
+    setGiftCardCode("");
+    setPurchaseAmount("");
+  };
+
+  if (transactionComplete) {
+    return (
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader className="text-center">
+          <CardTitle className="text-xl text-green-600 flex items-center justify-center gap-2">
+            <CheckCircle className="w-6 h-6" />
+            {transactionComplete.success ? "Transação Concluída!" : "Saldo Insuficiente"}
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="bg-gray-50 p-6 rounded-lg">
-            <div className="text-center mb-4">
-              <div className="w-24 h-24 mx-auto bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-                <CreditCard className="w-8 h-8 text-blue-600" />
-              </div>
-              <h4 className="font-semibold text-gray-900">Terminal POS Conectado</h4>
-              <p className="text-sm text-gray-600">Terminal 12345</p>
+        <CardContent className="space-y-4">
+          <div className="bg-gray-50 p-6 rounded-lg space-y-3">
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Saldo Original:</span>
+              <span className="font-medium">${transactionComplete.originalBalance.toFixed(2)}</span>
             </div>
-            
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Status:</span>
-                <Badge className="bg-green-100 text-green-600">
-                  <Zap className="w-3 h-3 mr-1" />
-                  Online
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Último Ping:</span>
-                <span className="text-sm text-gray-900">há 30s</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Transações Hoje:</span>
-                <span className="text-sm text-gray-900">23</span>
-              </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Valor da Compra:</span>
+              <span className="font-medium">${transactionComplete.purchaseAmount.toFixed(2)}</span>
             </div>
-            
-            <Button className="w-full mt-4 bg-blue-600 text-white hover:bg-blue-700">
-              <Settings className="w-4 h-4 mr-2" />
-              Configurar Terminal
-            </Button>
+            {transactionComplete.success && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Troco:</span>
+                  <span className="font-medium">${transactionComplete.change.toFixed(2)}</span>
+                </div>
+                {transactionComplete.changeNFT && (
+                  <div className="bg-blue-50 p-4 rounded-lg mt-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Gift className="w-4 h-4 text-blue-600" />
+                      <span className="font-medium text-blue-800">Novo NFT de Troco Criado</span>
+                    </div>
+                    <p className="text-sm text-blue-700">Token ID: {transactionComplete.changeNFT}</p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      O cliente pode usar este novo gift card NFT com o saldo restante
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
+          
+          <Button onClick={resetTransaction} className="w-full">
+            Nova Transação
+          </Button>
         </CardContent>
       </Card>
+    );
+  }
 
-      {/* Redemption Flow */}
+  return (
+    <div className="max-w-2xl mx-auto">
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">Processar Resgate</CardTitle>
+          <CardTitle className="text-lg font-semibold text-gray-900">Receber Pagamento com Gift Card NFT</CardTitle>
+          <p className="text-sm text-gray-600">Verificar saldo e processar compra com troco automático</p>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Código de Resgate
-              </label>
+        <CardContent className="space-y-6">
+          {/* Step 1: Gift Card Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Código do Gift Card NFT
+            </label>
+            <div className="flex gap-2">
               <input
                 type="text"
-                value={redemptionCode}
-                onChange={(e) => setRedemptionCode(e.target.value)}
+                value={giftCardCode}
+                onChange={(e) => setGiftCardCode(e.target.value)}
                 placeholder="GFC-ABC123"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               />
+              <Button 
+                onClick={handleVerifyBalance}
+                disabled={!giftCardCode || isProcessing}
+                variant="outline"
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Verificar"
+                )}
+              </Button>
             </div>
-            
+          </div>
+
+          {/* Step 2: Balance Display */}
+          {verificationResult && (
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="font-medium text-green-800">Gift Card Válido</span>
+              </div>
+              <div className="text-sm text-green-700">
+                <p>Token ID: {verificationResult.tokenId}</p>
+                <p className="font-medium text-lg">Saldo Disponível: ${verificationResult.balance.toFixed(2)}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Purchase Amount */}
+          {verificationResult && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Valor do Resgate ($)
+                Valor da Compra ($)
               </label>
               <input
                 type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="25.00"
+                value={purchaseAmount}
+                onChange={(e) => setPurchaseAmount(e.target.value)}
+                placeholder="0.00"
                 step="0.01"
                 min="0"
+                max={verificationResult.balance}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               />
+              
+              {purchaseAmount && parseFloat(purchaseAmount) > 0 && (
+                <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                  <div className="text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span>Saldo Atual:</span>
+                      <span>${verificationResult.balance.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Valor da Compra:</span>
+                      <span>${parseFloat(purchaseAmount).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-medium border-t pt-1">
+                      <span>Troco:</span>
+                      <span className={verificationResult.balance - parseFloat(purchaseAmount) >= 0 ? "text-green-600" : "text-red-600"}>
+                        ${Math.max(0, verificationResult.balance - parseFloat(purchaseAmount)).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm text-blue-700">
-                ℹ️ O valor será debitado automaticamente do saldo do gift card após confirmação.
-              </p>
-            </div>
-            
+          )}
+
+          {/* Step 4: Process Button */}
+          {verificationResult && purchaseAmount && (
             <div className="pt-4 border-t border-gray-200">
+              {parseFloat(purchaseAmount) > verificationResult.balance ? (
+                <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-lg mb-3">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">Saldo insuficiente para esta compra</span>
+                </div>
+              ) : null}
+              
               <Button 
-                onClick={handleProcessRedemption}
-                disabled={!redemptionCode || !amount || isProcessing}
+                onClick={handleProcessPurchase}
+                disabled={!purchaseAmount || isProcessing || parseFloat(purchaseAmount) > verificationResult.balance || parseFloat(purchaseAmount) <= 0}
                 className="w-full bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400"
               >
                 {isProcessing ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Processando...
+                    Processando Compra...
                   </>
                 ) : (
-                  "Processar Resgate"
+                  "Confirmar Compra"
                 )}
               </Button>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>
